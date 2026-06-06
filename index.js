@@ -3,19 +3,44 @@ const {
   listTasks,
   completeTask,
   removeTask,
+  listOverdueTasks,
+  listDueTodayTasks,
 } = require("./src/taskManager");
 
 function printHelp() {
   console.log("Usage:");
-  console.log("  npm start -- add \"Task title\"");
+  console.log("  npm start -- add \"Task title\" [--due YYYY-MM-DD]");
   console.log("  npm start -- list");
+  console.log("  npm start -- overdue");
+  console.log("  npm start -- due-today");
   console.log("  npm start -- done <id>");
   console.log("  npm start -- remove <id>");
 }
 
 function formatTask(task) {
   const status = task.completed ? "x" : " ";
-  return `[${status}] ${task.id}. ${task.title}`;
+  const due = task.dueDate ? ` (due: ${task.dueDate})` : "";
+  return `[${status}] ${task.id}. ${task.title}${due}`;
+}
+
+function parseAddArgs(args) {
+  const titleParts = [];
+  let dueDate = null;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--due") {
+      dueDate = args[index + 1];
+      index += 1;
+      continue;
+    }
+    titleParts.push(arg);
+  }
+
+  return {
+    title: titleParts.join(" ").trim(),
+    dueDate,
+  };
 }
 
 function run() {
@@ -27,13 +52,20 @@ function run() {
   }
 
   if (command === "add") {
-    const title = args.join(" ").trim();
+    const { title, dueDate } = parseAddArgs(args);
     if (!title) {
       console.error("Task title is required.");
       process.exitCode = 1;
       return;
     }
-    const task = addTask(title);
+    let task;
+    try {
+      task = addTask(title, { dueDate });
+    } catch (error) {
+      console.error(error.message);
+      process.exitCode = 1;
+      return;
+    }
     console.log(`Added task: ${formatTask(task)}`);
     return;
   }
@@ -42,6 +74,26 @@ function run() {
     const tasks = listTasks();
     if (tasks.length === 0) {
       console.log("No tasks yet.");
+      return;
+    }
+    tasks.forEach((task) => console.log(formatTask(task)));
+    return;
+  }
+
+  if (command === "overdue") {
+    const tasks = listOverdueTasks();
+    if (tasks.length === 0) {
+      console.log("No overdue tasks.");
+      return;
+    }
+    tasks.forEach((task) => console.log(formatTask(task)));
+    return;
+  }
+
+  if (command === "due-today") {
+    const tasks = listDueTodayTasks();
+    if (tasks.length === 0) {
+      console.log("No tasks due today.");
       return;
     }
     tasks.forEach((task) => console.log(formatTask(task)));

@@ -2,6 +2,42 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const TASKS_FILE = path.join(process.cwd(), "tasks.json");
+function toDateOnlyUtc(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const day = Number.parseInt(match[3], 10);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function toIsoDateString(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizeDueDate(dueDate) {
+  if (!dueDate) {
+    return null;
+  }
+  const parsed = toDateOnlyUtc(String(dueDate).trim());
+  if (!parsed) {
+    return null;
+  }
+  return toIsoDateString(parsed);
+}
 
 function loadTasks() {
   if (!fs.existsSync(TASKS_FILE)) {
@@ -28,15 +64,19 @@ function saveTasks(tasks) {
 function listTasks() {
   return loadTasks();
 }
-
-function addTask(title) {
+function addTask(title, options = {}) {
   const tasks = loadTasks();
   const maxId = tasks.reduce((max, task) => Math.max(max, task.id), 0);
+  const dueDate = normalizeDueDate(options.dueDate);
+  if (options.dueDate && !dueDate) {
+    throw new Error("Invalid due date format. Use YYYY-MM-DD.");
+  }
   const task = {
     id: maxId + 1,
     title,
     completed: false,
     createdAt: new Date().toISOString(),
+    dueDate,
   };
   tasks.push(task);
   saveTasks(tasks);
@@ -63,10 +103,25 @@ function removeTask(taskId) {
   saveTasks(nextTasks);
   return true;
 }
+function listOverdueTasks(referenceDate = new Date()) {
+  const today = toIsoDateString(referenceDate);
+  return loadTasks().filter(
+    (task) => !task.completed && task.dueDate && task.dueDate < today
+  );
+}
+
+function listDueTodayTasks(referenceDate = new Date()) {
+  const today = toIsoDateString(referenceDate);
+  return loadTasks().filter(
+    (task) => !task.completed && task.dueDate === today
+  );
+}
 
 module.exports = {
   listTasks,
   addTask,
   completeTask,
   removeTask,
+  listOverdueTasks,
+  listDueTodayTasks,
 };
